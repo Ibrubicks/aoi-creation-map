@@ -1,89 +1,132 @@
-import React, { useState, useRef, useEffect } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import './App.css'
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import 'leaflet-draw';
+import './App.css';
 
 interface Feature {
-  id: string
-  type: string
-  area: string
-  coordinates: [number, number][]
+  id: string;
+  type: string;
+  area: string;
+  geoJson: any;
 }
 
 export default function App() {
-  const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<L.Map | null>(null)
-  const drawnItems = useRef<Feature[]>([])
-  const [features, setFeatures] = useState<Feature[]>([])
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [drawMode, setDrawMode] = useState<'polygon' | 'line' | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const [features, setFeatures] = useState<Feature[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (!mapContainer.current || map.current) return
+    if (!mapContainer.current || mapRef.current) return;
 
-    map.current = L.map(mapContainer.current).setView([51.505, -0.09], 13)
+    // 1. Create map
+    const map = L.map(mapContainer.current).setView([51.505, -0.09], 13);
+    mapRef.current = map;
 
+    // 2. Add OSM tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap contributors',
-    }).addTo(map.current)
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
 
-    return () => {
-      if (map.current) {
-        map.current.remove()
-        map.current = null
+    // 3. FeatureGroup to manage drawn layers
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // 4. Leaflet.draw controls
+    // @ts-ignore next-line
+    const drawControl = new (L.Control as any).Draw({
+      edit: {
+        featureGroup: drawnItems,
+      },
+      draw: {
+        polygon: true,
+        polyline: true,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false,
       }
-    }
-  }, [])
+    });
+    map.addControl(drawControl);
 
-  const handleDrawPolygon = () => {
-    setDrawMode(isDrawing && drawMode === 'polygon' ? null : 'polygon')
-    setIsDrawing(!isDrawing)
-  }
+    // 5. Handle created shapes
+    map.on('draw:created', function (e: any) {
+      drawnItems.addLayer(e.layer);
+      const featureGeo = e.layer.toGeoJSON();
+      const area = featureGeo.geometry.type === 'Polygon'
+        ? 'Polygon'
+        : featureGeo.geometry.type === 'LineString'
+        ? 'Line'
+        : '';
+      setFeatures(old => [
+        ...old,
+        {
+          id: String(Date.now()) + Math.random(),
+          type: featureGeo.geometry.type,
+          area,
+          geoJson: featureGeo,
+        }
+      ]);
+    });
 
-  const handleDrawLine = () => {
-    setDrawMode(isDrawing && drawMode === 'line' ? null : 'line')
-    setIsDrawing(!isDrawing)
-  }
+    // 6. Handle deletions/edits
+    map.on('draw:deleted', function () {
+      const updated: Feature[] = [];
+      drawnItems.eachLayer(layer => {
+        const geo = (layer as any).toGeoJSON();
+        updated.push({
+          id: String(+new Date()) + Math.random(),
+          type: geo.geometry.type,
+          area: '',
+          geoJson: geo,
+        });
+      });
+      setFeatures(updated);
+    });
 
-  const handleClearAll = () => {
-    setFeatures([])
-    drawnItems.current = []
-    setIsDrawing(false)
-    setDrawMode(null)
-  }
+    // Clean up
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
 
-  const handleExport = () => {
-    const geoJSON = {
+  // --- Export features as GeoJSON ---
+  function handleExport() {
+    const geo = {
       type: 'FeatureCollection',
-      features: features.map((f) => ({
-        type: 'Feature',
-        geometry: {
-          type: drawMode === 'polygon' ? 'Polygon' : 'LineString',
-          coordinates: f.coordinates,
-        },
-        properties: { type: f.type, area: f.area },
-      })),
-    }
-    console.log(JSON.stringify(geoJSON, null, 2))
+      features: features.map(f => f.geoJson),
+    };
+    const data = JSON.stringify(geo, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'features.geojson';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
-  const handleApplyOutline = () => {
-    const newFeature: Feature = {
-      id: `feature-${Date.now()}`,
-      type: drawMode === 'polygon' ? 'Polygon' : 'Line',
-      area: 'Custom Area',
-      coordinates: [[51.5, -0.09]],
-    }
-    setFeatures([...features, newFeature])
+  // --- Clear All Button ---
+  function handleClear() {
+    if (!mapRef.current) return;
+    mapRef.current.eachLayer(layer => {
+      if ((layer as any).options && (layer as any).options.pane === "overlayPane") {
+        mapRef.current?.removeLayer(layer);
+      }
+    });
+    setFeatures([]);
   }
 
+  // --- Filter features for search ---
   const filteredFeatures = features.filter(
     (f) =>
       f.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
       f.area.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
   return (
     <div className="app-container">
@@ -98,36 +141,22 @@ export default function App() {
               Search or use vector tool to create your region
             </p>
           </section>
-
           <section className="sidebar-section">
             <h2 className="section-title">Search Area</h2>
             <div className="search-box">
               <input
                 type="text"
                 className="search-input"
-                placeholder="Search areas..."
+                placeholder="Search features..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </section>
-
           <section className="sidebar-section">
             <h2 className="section-title">Drawing Tools</h2>
             <div className="button-group">
-              <button
-                className={`btn-primary ${isDrawing && drawMode === 'polygon' ? 'active' : ''}`}
-                onClick={handleDrawPolygon}
-              >
-                ◯ Draw Polygon
-              </button>
-              <button
-                className={`btn-secondary ${isDrawing && drawMode === 'line' ? 'active' : ''}`}
-                onClick={handleDrawLine}
-              >
-                📍 Draw Line
-              </button>
-              <button className="btn-secondary" onClick={handleClearAll}>
+              <button className="btn-secondary" onClick={handleClear}>
                 🗑️ Clear All
               </button>
               <button className="btn-primary" onClick={handleExport}>
@@ -135,7 +164,6 @@ export default function App() {
               </button>
             </div>
           </section>
-
           <section className="sidebar-section">
             <h2 className="section-title">Statistics</h2>
             <div className="stats-box">
@@ -143,29 +171,23 @@ export default function App() {
                 <span className="stat-label">Features:</span>
                 <span className="stat-value">{features.length}</span>
               </div>
-              <div className="stat-row">
-                <span className="stat-label">Total Area:</span>
-                <span className="stat-value">0.00 km²</span>
-              </div>
             </div>
           </section>
-
           <section className="sidebar-section">
-            <button className="btn-apply-outline" onClick={handleApplyOutline}>
+            <button className="btn-apply-outline" disabled>
               ✓ Apply outline as base image
             </button>
             <p className="help-text">
               You can always edit the shape of the area later
             </p>
           </section>
-
           <section className="features-scroll">
             <h2 className="section-title">Features</h2>
             <div className="features-list">
               {filteredFeatures.length > 0 ? (
-                filteredFeatures.map((f) => (
+                filteredFeatures.map((f, idx) => (
                   <div key={f.id} className="feature-item">
-                    <span className="feature-badge">{filteredFeatures.indexOf(f) + 1}</span>
+                    <span className="feature-badge">{idx + 1}</span>
                     <div className="feature-details">
                       <span className="feature-type">{f.type}</span>
                       <span className="feature-area">{f.area}</span>
@@ -178,21 +200,8 @@ export default function App() {
             </div>
           </section>
         </aside>
-
-        <main className="app-map" ref={mapContainer} />
-
-        <div className="map-toolbar">
-          <button className="toolbar-icon" title="Zoom In">
-            ➕
-          </button>
-          <button className="toolbar-icon" title="Zoom Out">
-            ➖
-          </button>
-          <button className="toolbar-icon" title="Refresh">
-            🔄
-          </button>
-        </div>
+        <main className="app-map" ref={mapContainer}></main>
       </div>
     </div>
-  )
+  );
 }
