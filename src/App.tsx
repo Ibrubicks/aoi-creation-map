@@ -1,129 +1,198 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
 
-function App() {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<L.Map | null>(null)
-  const [featureCount, setFeatureCount] = useState(0)
-  const [showWMS, setShowWMS] = useState(true)
+interface Feature {
+  id: string
+  type: string
+  area: string
+  coordinates: [number, number][]
+}
+
+export default function App() {
+  const mapContainer = useRef<HTMLDivElement>(null)
+  const map = useRef<L.Map | null>(null)
+  const drawnItems = useRef<Feature[]>([])
+  const [features, setFeatures] = useState<Feature[]>([])
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [drawMode, setDrawMode] = useState<'polygon' | 'line' | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return
+    if (!mapContainer.current || map.current) return
 
-    // Create map
-    const map = L.map(mapRef.current, {
-      center: [51.5, 10.0],
-      zoom: 8,
-    })
-    mapInstanceRef.current = map
+    map.current = L.map(mapContainer.current).setView([51.505, -0.09], 13)
 
-    // Base layer - OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(map)
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(map.current)
 
-    // WMS layer - NRW orthophoto
-    const wmsLayer = L.tileLayer.wms(
-      'https://www.wms.nrw.de/geobasis/wms_nw_dop?',
-      {
-        layers: 'nw_dop_rgb',
-        format: 'image/jpeg',
-        transparent: true,
-        attribution: '© Land NRW 2024',
-        maxZoom: 22,
-      }
-    )
-    wmsLayer.addTo(map)
-
-    // Cleanup
     return () => {
-      map.remove()
-      mapInstanceRef.current = null
+      if (map.current) {
+        map.current.remove()
+        map.current = null
+      }
     }
   }, [])
 
-  const handleToggleWMS = () => {
-    if (mapInstanceRef.current) {
-      const layers = (mapInstanceRef.current as any)._layers
-      Object.values(layers).forEach((layer: any) => {
-        if (layer instanceof L.TileLayer.WMS) {
-          if (mapInstanceRef.current!.hasLayer(layer)) {
-            mapInstanceRef.current!.removeLayer(layer)
-            setShowWMS(false)
-          } else {
-            mapInstanceRef.current!.addLayer(layer)
-            setShowWMS(true)
-          }
-        }
-      })
-    }
+  const handleDrawPolygon = () => {
+    setDrawMode(isDrawing && drawMode === 'polygon' ? null : 'polygon')
+    setIsDrawing(!isDrawing)
   }
 
-  const handleExportGeoJSON = () => {
-    const data = {
-      type: 'FeatureCollection',
-      features: [],
-    }
-    const geojsonStr = JSON.stringify(data, null, 2)
-    const blob = new Blob([geojsonStr], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `aoi-${Date.now()}.geojson`
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleDrawLine = () => {
+    setDrawMode(isDrawing && drawMode === 'line' ? null : 'line')
+    setIsDrawing(!isDrawing)
   }
+
+  const handleClearAll = () => {
+    setFeatures([])
+    drawnItems.current = []
+    setIsDrawing(false)
+    setDrawMode(null)
+  }
+
+  const handleExport = () => {
+    const geoJSON = {
+      type: 'FeatureCollection',
+      features: features.map((f) => ({
+        type: 'Feature',
+        geometry: {
+          type: drawMode === 'polygon' ? 'Polygon' : 'LineString',
+          coordinates: f.coordinates,
+        },
+        properties: { type: f.type, area: f.area },
+      })),
+    }
+    console.log(JSON.stringify(geoJSON, null, 2))
+  }
+
+  const handleApplyOutline = () => {
+    const newFeature: Feature = {
+      id: `feature-${Date.now()}`,
+      type: drawMode === 'polygon' ? 'Polygon' : 'Line',
+      area: 'Custom Area',
+      coordinates: [[51.5, -0.09]],
+    }
+    setFeatures([...features, newFeature])
+  }
+
+  const filteredFeatures = features.filter(
+    (f) =>
+      f.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.area.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   return (
-    <div className="w-full h-screen flex flex-col bg-white">
-      <header className="bg-white border-b border-gray-200 p-4 shadow-sm">
-        <h1 className="text-2xl font-bold">🛰️ AOI Creation Map</h1>
+    <div className="app-container">
+      <header className="app-header">
+        <h1 className="header-title">📍 AOI Creation Map</h1>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto">
-          <div className="mb-6">
-            <h2 className="text-sm font-bold text-gray-600 mb-3 uppercase tracking-wider">
-              Controls
-            </h2>
-            <button
-              onClick={handleToggleWMS}
-              className="w-full mb-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-            >
-              {showWMS ? '🛰️ Hide Satellite' : '🛰️ Show Satellite'}
-            </button>
-            <button
-              onClick={handleExportGeoJSON}
-              className="w-full mb-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
-            >
-              📥 Export GeoJSON
-            </button>
-          </div>
-
-          <div className="bg-gray-100 p-3 rounded mb-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-2">Statistics</h3>
-            <p className="text-sm text-gray-600">
-              Features: <span className="font-bold text-gray-900">{featureCount}</span>
+      <div className="app-content">
+        <aside className="app-sidebar">
+          <section className="sidebar-section">
+            <p className="sidebar-intro">
+              Search or use vector tool to create your region
             </p>
-          </div>
+          </section>
 
-          <div className="text-xs text-gray-600 bg-blue-50 p-3 rounded border-l-4 border-blue-500">
-            <strong>How to use:</strong>
-            <ol className="mt-2 space-y-1">
-              <li>1. View the map</li>
-              <li>2. Toggle satellite view</li>
-              <li>3. Export GeoJSON when ready</li>
-            </ol>
-          </div>
+          <section className="sidebar-section">
+            <h2 className="section-title">Search Area</h2>
+            <div className="search-box">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search areas..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </section>
+
+          <section className="sidebar-section">
+            <h2 className="section-title">Drawing Tools</h2>
+            <div className="button-group">
+              <button
+                className={`btn-primary ${isDrawing && drawMode === 'polygon' ? 'active' : ''}`}
+                onClick={handleDrawPolygon}
+              >
+                ◯ Draw Polygon
+              </button>
+              <button
+                className={`btn-secondary ${isDrawing && drawMode === 'line' ? 'active' : ''}`}
+                onClick={handleDrawLine}
+              >
+                📍 Draw Line
+              </button>
+              <button className="btn-secondary" onClick={handleClearAll}>
+                🗑️ Clear All
+              </button>
+              <button className="btn-primary" onClick={handleExport}>
+                📥 Export GeoJSON
+              </button>
+            </div>
+          </section>
+
+          <section className="sidebar-section">
+            <h2 className="section-title">Statistics</h2>
+            <div className="stats-box">
+              <div className="stat-row">
+                <span className="stat-label">Features:</span>
+                <span className="stat-value">{features.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Total Area:</span>
+                <span className="stat-value">0.00 km²</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="sidebar-section">
+            <button className="btn-apply-outline" onClick={handleApplyOutline}>
+              ✓ Apply outline as base image
+            </button>
+            <p className="help-text">
+              You can always edit the shape of the area later
+            </p>
+          </section>
+
+          <section className="features-scroll">
+            <h2 className="section-title">Features</h2>
+            <div className="features-list">
+              {filteredFeatures.length > 0 ? (
+                filteredFeatures.map((f) => (
+                  <div key={f.id} className="feature-item">
+                    <span className="feature-badge">{filteredFeatures.indexOf(f) + 1}</span>
+                    <div className="feature-details">
+                      <span className="feature-type">{f.type}</span>
+                      <span className="feature-area">{f.area}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-features">No features yet</div>
+              )}
+            </div>
+          </section>
         </aside>
 
-        <main className="flex-1 bg-gray-50" ref={mapRef}></main>
+        <main className="app-map" ref={mapContainer} />
+
+        <div className="map-toolbar">
+          <button className="toolbar-icon" title="Zoom In">
+            ➕
+          </button>
+          <button className="toolbar-icon" title="Zoom Out">
+            ➖
+          </button>
+          <button className="toolbar-icon" title="Refresh">
+            🔄
+          </button>
+        </div>
       </div>
     </div>
   )
 }
-
-export default App
