@@ -1,533 +1,422 @@
-import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
-import 'leaflet-draw';
-import './App.css';
+import React, { useEffect, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "leaflet-draw/dist/leaflet.draw.css";
+import "leaflet-draw";
+import "./App.css";
 
-interface Feature {
-  id: string;
-  type: string;
-  area: string;
-  geoJson: any;
-}
+/* ICONS — white, crisp, visible */
+const IconHome = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+  </svg>
+);
 
-interface DrawLayer extends L.Layer {
-  toGeoJSON(): any;
+const IconGrid = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7"></rect>
+    <rect x="14" y="3" width="7" height="7"></rect>
+    <rect x="14" y="14" width="7" height="7"></rect>
+    <rect x="3" y="14" width="7" height="7"></rect>
+  </svg>
+);
+
+const IconLayers = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+    <polyline points="2 17 12 22 22 17"></polyline>
+    <polyline points="2 12 12 17 22 12"></polyline>
+  </svg>
+);
+
+const IconUser = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+    <circle cx="12" cy="7" r="4"></circle>
+  </svg>
+);
+
+const IconGear = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"></circle>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+  </svg>
+);
+
+/* DRAW TOOL ICONS */
+const IconPolyline = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19L9 12L14 15L20 5"></path>
+    <circle cx="4" cy="19" r="2" fill="currentColor" stroke="none"></circle>
+    <circle cx="20" cy="5" r="2" fill="currentColor" stroke="none"></circle>
+  </svg>
+);
+
+const IconPolygon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+    <polygon points="12,3 21,9 18,20 6,20 3,9"></polygon>
+  </svg>
+);
+
+const IconEdit = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+  </svg>
+);
+
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+  </svg>
+);
+
+// Area type
+interface Area {
+  id: number;
+  name: string;
+  layer: L.Layer;
+  visible: boolean;
 }
 
 export default function App() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
-  const layersRef = useRef<{ satellite: L.TileLayer; normal: L.TileLayer } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [features, setFeatures] = useState<Feature[]>(() => {
-    try {
-      const stored = localStorage.getItem('aoiFeatures');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
-  const [mapMode, setMapMode] = useState<'satellite' | 'normal'>('satellite');
+  const drawHandlerRef = useRef<any>(null);
   const [drawingMode, setDrawingMode] = useState<string | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [mapMode, setMapMode] = useState<"normal" | "satellite">("normal");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [editMode, setEditMode] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const areaCounterRef = useRef(0);
 
-  // Persist features
-  useEffect(() => {
-    localStorage.setItem('aoiFeatures', JSON.stringify(features));
-  }, [features]);
-
-  // Initialize map
+  /* MAP INIT */
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
-    try {
-      const map = L.map(mapContainer.current).setView([51.225, 6.776], 10);
-      mapRef.current = map;
+    const map = L.map(mapContainer.current, { zoomControl: false }).setView([50.94, 6.95], 12);
+    mapRef.current = map;
 
-      // Satellite layer (WMS)
-      const satelliteLayer = L.tileLayer.wms(
-        'https://www.wms.nrw.de/geobasis/wms_nw_dop',
-        {
-          layers: 'nw_dop_rgb',
-          format: 'image/png',
-          transparent: false,
-          maxZoom: 20,
-          minZoom: 5,
-          attribution: '© Land NRW',
-        }
-      );
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-      // Normal layer (OSM)
-      const normalLayer = L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap contributors',
-        }
-      );
+    const drawnItems = new L.FeatureGroup();
+    drawnItemsRef.current = drawnItems;
+    map.addLayer(drawnItems);
 
-      layersRef.current = { satellite: satelliteLayer, normal: normalLayer };
-      satelliteLayer.addTo(map);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      // FeatureGroup for drawing
-      const drawnItems = new L.FeatureGroup();
-      map.addLayer(drawnItems);
-      drawnItemsRef.current = drawnItems;
+    map.on("draw:created", (e: any) => {
+      const layer = e.layer;
+      drawnItems.addLayer(layer);
 
-      // Leaflet.draw configuration
-      const drawControl = new (L.Control as any).Draw({
-        edit: {
-          featureGroup: drawnItems,
-          poly: { allowIntersection: true },
-        },
-        draw: {
-          polygon: { 
-            allowIntersection: true, 
-            showArea: true,
-            shapeOptions: {
-              color: '#2196F3',
-              weight: 2,
-              opacity: 0.8,
-              fillOpacity: 0.3,
-            }
-          },
-          polyline: { 
-            metric: true,
-            shapeOptions: {
-              color: '#FF9800',
-              weight: 3,
-              opacity: 0.8,
-            }
-          },
-          rectangle: false,
-          circle: false,
-          marker: false,
-          circlemarker: false,
-        },
-      });
-      map.addControl(drawControl);
-
-      // Detect drawing mode
-      map.on('draw:drawstart', function (e: any) {
-        const drawType = e.layerType;
-        setDrawingMode(drawType);
-        console.log('Started drawing:', drawType);
-      });
-
-      map.on('draw:drawstop', function () {
-        setDrawingMode(null);
-        console.log('Stopped drawing');
-      });
-
-      // Draw created
-      map.on('draw:created', function (e: any) {
-        const layer = e.layer as DrawLayer;
-        drawnItems.addLayer(layer);
-        const featureGeo = layer.toGeoJSON();
-        const type = featureGeo.geometry.type;
-
-        const newFeature: Feature = {
-          id: `${Date.now()}-${Math.random()}`,
-          type,
-          area: type === 'Polygon' ? 'Polygon Area' : 'Polyline Route',
-          geoJson: featureGeo,
-        };
-
-        setFeatures((prev) => [...prev, newFeature]);
-        setDrawingMode(null);
-        console.log('Feature created:', type, featureGeo);
-      });
-
-      // Draw edited
-      map.on('draw:edited', function (e: any) {
-        const layers = e.layers;
-        layers.eachLayer((layer: any) => {
-          console.log('Feature edited:', layer.toGeoJSON());
-        });
-      });
-
-      // Draw deleted
-      map.on('draw:deleted', function (e: any) {
-        const layers = e.layers;
-        layers.eachLayer((layer: any) => {
-          const geo = layer.toGeoJSON();
-          setFeatures((prev) =>
-            prev.filter((f) => JSON.stringify(f.geoJson) !== JSON.stringify(geo))
-          );
-        });
-      });
-
-      // Restore features
-      features.forEach((feature) => {
-        try {
-          const layer = L.geoJSON(feature.geoJson);
-          drawnItems.addLayer(layer);
-        } catch (err) {
-          console.error('Failed to restore feature:', err);
-        }
-      });
-
-      return () => {
-        map.remove();
-        mapRef.current = null;
+      areaCounterRef.current += 1;
+      const newArea: Area = {
+        id: areaCounterRef.current,
+        name: `Area ${areaCounterRef.current}`,
+        layer: layer,
+        visible: true,
       };
-    } catch (error) {
-      console.error('Map failed:', error);
-    }
+      setAreas((prev) => [...prev, newArea]);
+      setDrawingMode(null);
+    });
+
+    map.on("draw:drawstop", () => {
+      setDrawingMode(null);
+    });
   }, []);
 
-  // Handle place search with Enter key
-  const handleSearchPlace = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
+  const startDrawing = (type: "polyline" | "polygon") => {
+    if (!mapRef.current || !drawnItemsRef.current) return;
     
-    const query = searchTerm.trim();
-    if (!query) return;
-
-    setSearchLoading(true);
-    try {
-      // Using Nominatim API (OpenStreetMap's free geocoding)
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
-      );
-      
-      if (!response.ok) throw new Error('Search failed');
-      
-      const results = await response.json();
-      setSearchResults(results);
-      
-      if (results.length > 0) {
-        // Center map on first result
-        const { lat, lon } = results[0];
-        mapRef.current?.setView([parseFloat(lat), parseFloat(lon)], 12);
-      }
-    } catch (error) {
-      console.error('Place search failed:', error);
-      alert('❌ Place search failed. Try another location.');
-    } finally {
-      setSearchLoading(false);
+    // Cancel any existing drawing
+    if (drawHandlerRef.current) {
+      drawHandlerRef.current.disable();
     }
-  };
 
-  // Handle clicking on a search result
-  const handleSelectResult = (result: any) => {
-    const { lat, lon, display_name } = result;
-    mapRef.current?.setView([parseFloat(lat), parseFloat(lon)], 13);
-    setSearchResults([]);
-    setSearchTerm(display_name);
-  };
+    const options = {
+      shapeOptions: { color: "#f7b86b", weight: 3 }
+    };
 
-  // Handle map layer toggle
-  const toggleMapMode = (mode: 'satellite' | 'normal') => {
-    if (!mapRef.current || !layersRef.current) return;
-
-    if (mode === 'satellite') {
-      mapRef.current.removeLayer(layersRef.current.normal);
-      mapRef.current.addLayer(layersRef.current.satellite);
-      setMapMode('satellite');
+    if (type === "polyline") {
+      drawHandlerRef.current = new (L.Draw as any).Polyline(mapRef.current, options);
     } else {
-      mapRef.current.removeLayer(layersRef.current.satellite);
-      mapRef.current.addLayer(layersRef.current.normal);
-      setMapMode('normal');
+      drawHandlerRef.current = new (L.Draw as any).Polygon(mapRef.current, options);
+    }
+    
+    drawHandlerRef.current.enable();
+    setDrawingMode(type);
+  };
+
+  const toggleEditMode = () => {
+    if (!mapRef.current || !drawnItemsRef.current) return;
+    
+    if (editMode) {
+      // Save edits
+      setEditMode(false);
+    } else {
+      setDeleteMode(false);
+      setEditMode(true);
+      // Enable editing on all layers
+      drawnItemsRef.current.eachLayer((layer: any) => {
+        if (layer.editing) {
+          layer.editing.enable();
+        }
+      });
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const toggleDeleteMode = () => {
+    setDeleteMode(!deleteMode);
+    setEditMode(false);
+    
+    if (drawnItemsRef.current) {
+      drawnItemsRef.current.eachLayer((layer: any) => {
+        if (layer.editing) {
+          layer.editing.disable();
+        }
+      });
+    }
+  };
+
+  const toggleMapMode = (mode: "normal" | "satellite") => {
+    if (!mapRef.current) return;
+    setMapMode(mode);
+
+    mapRef.current.eachLayer((layer) => {
+      if (layer instanceof L.TileLayer) {
+        mapRef.current!.removeLayer(layer);
+      }
+    });
+
+    if (mode === "normal") {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(mapRef.current);
+    } else {
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ).addTo(mapRef.current);
+    }
+  };
+
+  const handleSearch = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    const q = searchTerm.trim();
+    if (!q || !mapRef.current) return;
+
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`
+    );
+    const json = await r.json();
+    if (json[0]) {
+      mapRef.current.setView([parseFloat(json[0].lat), parseFloat(json[0].lon)], 13);
+    }
+  };
+
+  const uploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (ev) => {
       try {
-        const content = event.target?.result as string;
-        const geoJSON = JSON.parse(content);
+        const geo = JSON.parse(ev.target?.result as string);
+        const layer = L.geoJSON(geo, {
+          style: { color: "#f7b86b", weight: 3 },
+        });
+        drawnItemsRef.current?.addLayer(layer);
+        mapRef.current?.fitBounds(layer.getBounds());
 
-        if (!drawnItemsRef.current || !mapRef.current) return;
-
-        // Add GeoJSON to map
-        const layer = L.geoJSON(geoJSON);
-        drawnItemsRef.current.addLayer(layer);
-
-        // Extract features
-        if (geoJSON.features) {
-          const newFeatures: Feature[] = geoJSON.features.map(
-            (feat: any, idx: number) => ({
-              id: `uploaded-${Date.now()}-${idx}`,
-              type: feat.geometry.type,
-              area:
-                feat.geometry.type === 'Polygon'
-                  ? 'Polygon Area'
-                  : 'Polyline Route',
-              geoJson: feat,
-            })
-          );
-          setFeatures((prev) => [...prev, ...newFeatures]);
-        } else if (geoJSON.geometry) {
-          const feature: Feature = {
-            id: `uploaded-${Date.now()}`,
-            type: geoJSON.geometry.type,
-            area:
-              geoJSON.geometry.type === 'Polygon'
-                ? 'Polygon Area'
-                : 'Polyline Route',
-            geoJson: geoJSON,
-          };
-          setFeatures((prev) => [...prev, feature]);
-        }
-
-        // Fit bounds
-        if (layer.getBounds && layer.getBounds().isValid()) {
-          mapRef.current.fitBounds(layer.getBounds());
-        }
-
-        alert('✅ File uploaded successfully!');
-      } catch (error) {
-        console.error('Upload failed:', error);
-        alert('❌ Failed to upload file. Ensure it\'s valid GeoJSON.');
+        areaCounterRef.current += 1;
+        const newArea: Area = {
+          id: areaCounterRef.current,
+          name: `Area ${areaCounterRef.current}`,
+          layer: layer,
+          visible: true,
+        };
+        setAreas((prev) => [...prev, newArea]);
+      } catch {
+        alert("Invalid GeoJSON");
       }
     };
-
     reader.readAsText(file);
   };
 
-  const handleExport = () => {
-    try {
-      const geoJSON = {
-        type: 'FeatureCollection',
-        features: features.map((f) => f.geoJson),
-      };
-      const dataStr = JSON.stringify(geoJSON, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `aoi-${new Date().toISOString().slice(0, 10)}.geojson`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Failed to export');
+  const deleteArea = (areaId: number) => {
+    const area = areas.find((a) => a.id === areaId);
+    if (area && drawnItemsRef.current) {
+      drawnItemsRef.current.removeLayer(area.layer);
     }
+    setAreas((prev) => prev.filter((a) => a.id !== areaId));
   };
 
-  const handleClear = () => {
-    if (confirm('Clear all features?')) {
-      setFeatures([]);
-      if (drawnItemsRef.current) {
-        drawnItemsRef.current.clearLayers();
-      }
-    }
+  const toggleAreaVisibility = (areaId: number) => {
+    setAreas((prev) =>
+      prev.map((a) => {
+        if (a.id === areaId) {
+          if (a.visible) {
+            drawnItemsRef.current?.removeLayer(a.layer);
+          } else {
+            drawnItemsRef.current?.addLayer(a.layer);
+          }
+          return { ...a, visible: !a.visible };
+        }
+        return a;
+      })
+    );
   };
-
-  const filteredFeatures = features.filter(
-    (f) =>
-      f.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.area.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
-    <div className="app-container">
-      {/* HEADER */}
-      <header className="app-header">
-        <h1 className="header-title">📍 Define Area of Interest</h1>
-      </header>
+    <div className="app-shell">
+      {/* LEFT TOOLBAR */}
+      <div className="left-toolbar">
+        <button className="icon-btn">
+          <IconHome />
+        </button>
+        <button className="icon-btn">
+          <IconGrid />
+        </button>
+        <button className="icon-btn">
+          <IconLayers />
+        </button>
 
-      {/* MAIN CONTENT */}
-      <div className="app-content">
-        {/* SIDEBAR */}
-        <aside className="app-sidebar">
-          {/* Intro */}
-          <section className="sidebar-section">
-            <p className="sidebar-intro">
-              Define the area(s) where you will apply your object count &
-              detection model
-            </p>
-          </section>
+        <div className="footer-icons">
+          <button className="icon-btn">
+            <IconUser />
+          </button>
+          <button className="icon-btn">
+            <IconGear />
+          </button>
+        </div>
+      </div>
 
-          {/* Drawing Help */}
-          {drawingMode && (
-            <section className="sidebar-section drawing-help">
-              <h2 className="section-title">🎯 Drawing Instructions:</h2>
-              {drawingMode === 'polygon' ? (
-                <div className="help-text">
-                  <p>✏️ <strong>Polygon Mode Active</strong></p>
-                  <ul>
-                    <li>Click on the map to add points</li>
-                    <li>Add as many points as you want</li>
-                    <li>Double-click to finish drawing</li>
-                    <li>Or right-click and select "Finish"</li>
-                  </ul>
-                </div>
-              ) : (
-                <div className="help-text">
-                  <p>📌 <strong>Polyline Mode Active</strong></p>
-                  <ul>
-                    <li>Click on the map to add points</li>
-                    <li>Connect dots to create a line</li>
-                    <li>Press <strong>Escape</strong> or double-click to finish</li>
-                    <li>Or right-click and select "Finish"</li>
-                  </ul>
-                </div>
-              )}
-            </section>
-          )}
+      {/* SIDEBAR */}
+      <div className="app-sidebar">
+        <div className="sidebar-header">
+          <div className="header-back">‹</div>
+          <div className="header-title">Define Area of Interest</div>
+        </div>
 
-          {/* Search */}
-          <section className="sidebar-section">
-            <h2 className="section-title">Options:</h2>
-            <div className="search-box">
-              <input
-                type="text"
-                className="search-input"
-                placeholder="🔍 Search for a city, town, place... or draw area on map"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={handleSearchPlace}
-                aria-label="Search places"
-              />
-              {searchLoading && <div className="search-loading">Searching...</div>}
-              
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="search-results">
-                  {searchResults.map((result, idx) => (
-                    <div
-                      key={idx}
-                      className="search-result-item"
-                      onClick={() => handleSelectResult(result)}
+        <div className="sidebar-title">Define the area(s)</div>
+        <div className="sidebar-subtitle">
+          where you will apply your object count & detection model
+        </div>
+
+        <div className="section-title">Options:</div>
+        <input
+          className="search-input"
+          type="text"
+          placeholder="Search for city, town… or draw area on map"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyDown={handleSearch}
+        />
+
+        <div className="map-mode-buttons">
+          <button
+            className={`btn-map ${mapMode === "normal" ? "active" : ""}`}
+            onClick={() => toggleMapMode("normal")}
+          >
+            🗺️ Normal
+          </button>
+          <button
+            className={`btn-map ${mapMode === "satellite" ? "active" : ""}`}
+            onClick={() => toggleMapMode("satellite")}
+          >
+            🛰️ Satellite
+          </button>
+        </div>
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          accept=".json,.geojson"
+          onChange={uploadFile}
+        />
+        <button className="upload-btn" onClick={() => fileInputRef.current?.click()}>
+          📁 Uploading a shape file
+        </button>
+
+        {/* AREAS LIST */}
+        {areas.length > 0 && (
+          <div className="areas-section">
+            <div className="section-title">Created Areas:</div>
+            <div className="areas-list">
+              {areas.map((area) => (
+                <div key={area.id} className="area-item">
+                  <div className="area-color-box"></div>
+                  <span className="area-name">{area.name}</span>
+                  <div className="area-actions">
+                    <button
+                      className="area-action-btn"
+                      onClick={() => deleteArea(area.id)}
+                      title="Delete"
                     >
-                      <div className="result-name">{result.display_name.split(',')[0]}</div>
-                      <div className="result-address">{result.display_name.substring(0, 50)}...</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button
-              className="btn-upload"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              📁 Uploading a shape file
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".geojson,.json,.shp,.zip"
-              style={{ display: 'none' }}
-              aria-label="Upload GeoJSON or Shapefile"
-            />
-          </section>
-
-          {/* Map Mode Toggle */}
-          <section className="sidebar-section">
-            <h2 className="section-title">Map View:</h2>
-            <div className="map-mode-buttons">
-              <button
-                className={`btn-map-mode ${mapMode === 'satellite' ? 'active' : ''}`}
-                onClick={() => toggleMapMode('satellite')}
-              >
-                🛰️ Satellite
-              </button>
-              <button
-                className={`btn-map-mode ${mapMode === 'normal' ? 'active' : ''}`}
-                onClick={() => toggleMapMode('normal')}
-              >
-                🗺️ Normal
-              </button>
-            </div>
-          </section>
-
-          {/* Tools */}
-          <section className="sidebar-section">
-            <div className="button-group">
-              <button
-                className="btn-primary"
-                onClick={handleExport}
-                disabled={features.length === 0}
-              >
-                📥 Export to GeoJSON
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={handleClear}
-                disabled={features.length === 0}
-              >
-                🗑️ Clear All Features
-              </button>
-            </div>
-          </section>
-
-          {/* Stats */}
-          <section className="sidebar-section">
-            <h2 className="section-title">Statistics</h2>
-            <div className="stats-box">
-              <div className="stat-row">
-                <span className="stat-label">Total Features:</span>
-                <span className="stat-value">{features.length}</span>
-              </div>
-              <div className="stat-row">
-                <span className="stat-label">Polygons:</span>
-                <span className="stat-value">
-                  {features.filter((f) => f.type === 'Polygon').length}
-                </span>
-              </div>
-              <div className="stat-row">
-                <span className="stat-label">Polylines:</span>
-                <span className="stat-value">
-                  {features.filter((f) => f.type === 'LineString').length}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* Features List */}
-          <section className="features-scroll">
-            <h2 className="section-title">Features ({filteredFeatures.length})</h2>
-            <div className="features-list">
-              {filteredFeatures.length > 0 ? (
-                filteredFeatures.map((feature, idx) => (
-                  <div
-                    key={feature.id}
-                    className={`feature-item ${
-                      selectedFeature === feature.id ? 'active' : ''
-                    }`}
-                    onClick={() => setSelectedFeature(feature.id)}
-                    role="listitem"
-                  >
-                    <span className="feature-badge">{idx + 1}</span>
-                    <div className="feature-details">
-                      <span className="feature-type">{feature.type}</span>
-                      <span className="feature-area">{feature.area}</span>
-                    </div>
+                      🗑️
+                    </button>
+                    <button
+                      className={`area-action-btn ${!area.visible ? "hidden-area" : ""}`}
+                      onClick={() => toggleAreaVisibility(area.id)}
+                      title={area.visible ? "Hide" : "Show"}
+                    >
+                      {area.visible ? "👁️" : "👁️‍🗨️"}
+                    </button>
                   </div>
-                ))
-              ) : (
-                <div className="empty-features">
-                  {features.length === 0
-                    ? '📍 Draw polygons or polylines on the map'
-                    : '🔍 No features match search'}
                 </div>
-              )}
+              ))}
             </div>
-          </section>
-        </aside>
+          </div>
+        )}
 
-        {/* MAP */}
-        <main
-          className="app-map"
-          ref={mapContainer}
-          role="region"
-          aria-label="Interactive map"
-        ></main>
+        {drawingMode && (
+          <div className="drawing-help">
+            <strong>Drawing: {drawingMode}</strong>
+            <ul>
+              <li>Click to add points</li>
+              <li>Double-click to finish</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* MAP */}
+      <div className="app-map" ref={mapContainer}>
+        {/* CUSTOM DRAW TOOLBAR */}
+        <div className="custom-draw-toolbar">
+          <button 
+            className={`draw-tool-btn ${drawingMode === 'polyline' ? 'active' : ''}`}
+            onClick={() => startDrawing('polyline')}
+            title="Draw Polyline"
+          >
+            <IconPolyline />
+          </button>
+          <button 
+            className={`draw-tool-btn ${drawingMode === 'polygon' ? 'active' : ''}`}
+            onClick={() => startDrawing('polygon')}
+            title="Draw Polygon"
+          >
+            <IconPolygon />
+          </button>
+          <div className="draw-toolbar-divider"></div>
+          <button 
+            className={`draw-tool-btn ${editMode ? 'active' : ''}`}
+            onClick={toggleEditMode}
+            title="Edit Layers"
+          >
+            <IconEdit />
+          </button>
+          <button 
+            className={`draw-tool-btn ${deleteMode ? 'active' : ''}`}
+            onClick={toggleDeleteMode}
+            title="Delete Layers"
+          >
+            <IconTrash />
+          </button>
+        </div>
       </div>
     </div>
   );
